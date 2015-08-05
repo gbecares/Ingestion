@@ -110,6 +110,11 @@
         </dependency>
         <dependency>
             <groupId>com.stratio.ingestion</groupId>
+            <artifactId>stratio-hdfs-sink</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.stratio.ingestion</groupId>
             <artifactId>stratio-elasticsearch-serializer</artifactId>
             <version>${project.version}</version>
         </dependency>

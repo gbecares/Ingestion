@@ -56,7 +56,7 @@
         <tika.version>1.5</tika.version>
         <commons.lang3.version>3.3.2</commons.lang3.version>
         <!-- Watch Flume -->
-        <hadoop.version>2.4.0</hadoop.version>
+        <hadoop.version>2.6.0</hadoop.version>
         <commons.io.version>2.1</commons.io.version>
         <slf4j.version>1.7.7</slf4j.version>
         <kite.version>0.17.0</kite.version>
@@ -70,6 +70,7 @@
         <quartz.version>2.2.1</quartz.version>
         <maxmind.version>0.3.3</maxmind.version>
         <jersey.core.version>1.18.3</jersey.core.version>
+        <hadoop.common.artifact.id>hadoop-common</hadoop.common.artifact.id>
     </properties>
 
     <dependencyManagement>
@@ -188,6 +189,23 @@
                 <version>${maxmind.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>org.apache.hadoop</groupId>
+                <artifactId>hadoop-hdfs</artifactId>
+                <version>${hadoop.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.hadoop</groupId>
+                <artifactId>hadoop-auth</artifactId>
+                <version>${hadoop.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.hadoop</groupId>
+                <artifactId>hadoop-minicluster</artifactId>
+                <version>${hadoop.version}</version>
+            </dependency>
 	
         </dependencies>
     </dependencyManagement>
