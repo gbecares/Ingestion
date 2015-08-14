@@ -40,6 +40,16 @@
 		<dependency>
 			<groupId>org.kitesdk</groupId>
 			<artifactId>kite-morphlines-core</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>org.apache.hadoop</groupId>
+					<artifactId>hadoop-annotations</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.hadoop</groupId>
+					<artifactId>hadoop-common</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>info.bliki.wiki</groupId>
