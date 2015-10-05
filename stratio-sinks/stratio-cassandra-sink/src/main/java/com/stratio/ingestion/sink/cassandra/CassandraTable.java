@@ -19,8 +19,10 @@ import static com.stratio.ingestion.sink.cassandra.CassandraUtils.parseValue;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.flume.Event;
 import org.slf4j.Logger;
@@ -37,88 +39,122 @@ import com.google.common.base.Charsets;
 
 class CassandraTable {
 
-  private static final Logger log = LoggerFactory.getLogger(CassandraTable.class);
+    private static final Logger log = LoggerFactory.getLogger(CassandraTable.class);
 
-  private final Session session;
-  private final TableMetadata table;
-  private final ConsistencyLevel consistencyLevel;
-  private final String bodyColumn;
+    private final Session session;
+    private final TableMetadata table;
+    private final ConsistencyLevel consistencyLevel;
+    private final String bodyColumn;
 
-  private final List<ColumnMetadata> columns;
-  private final int totalColumns;
-  private final List<String> primaryKeys;
+    private final List<ColumnMetadata> columns;
+    private final int totalColumns;
+    private final List<String> primaryKeys;
 
-  public CassandraTable(
-      final Session session,
-      final TableMetadata table,
-      final ConsistencyLevel consistencyLevel,
-      final String bodyColumn) {
-    this.session = session;
-    this.table = table;
-    this.consistencyLevel = consistencyLevel;
-    this.bodyColumn = bodyColumn;
+    private final boolean ignoreCase;
 
-    this.columns = table.getColumns();
-    this.totalColumns = this.columns.size();
-    this.primaryKeys = new ArrayList<String>();
-    for (final ColumnMetadata column : table.getPrimaryKey()) {
-      primaryKeys.add(column.getName());
-    }
-  }
+    public CassandraTable(
+            final Session session,
+            final TableMetadata table,
+            final ConsistencyLevel consistencyLevel,
+            final String bodyColumn) {
+        this(session, table, consistencyLevel, bodyColumn, false);
 
-  public void save(final List<Event> events) {
-    final BatchStatement batch = new BatchStatement();
-    for (final Event event : events) {
-      final Map<String, Object> parsedEvent = parse(event);
-      if (parsedEvent.isEmpty()) {
-        log.warn("Event {} could not be mapped", event);
-        continue;
-      }
-      if (!hasPrimaryKey(parsedEvent)) {
-        break;
-      }
-      final Insert insert = QueryBuilder.insertInto(table);
-      for (final Map.Entry<String, Object> entry : parsedEvent.entrySet()) {
-        insert.value(entry.getKey(), entry.getValue());
-      }
-      if (log.isTraceEnabled()) {
-        log.trace("Preparing insert for table {}: {}", table.getName(), insert.getQueryString());
-      }
-      batch.add(insert);
-    }
-    if (batch.getStatements().isEmpty()) {
-      log.warn("No event produced insert query for table {}", table.getName());
-      return;
-    }
-    batch.setConsistencyLevel(consistencyLevel);
-    session.execute(batch);
-  }
-
-  private boolean hasPrimaryKey(final Map<String,Object> parsedEvent) {
-    for (final String primaryKey : primaryKeys) {
-      if (!parsedEvent.containsKey(primaryKey)) {
-        log.info("Event {} misses primary key ({}), skipping", parsedEvent, primaryKey);
-        return false;
-      }
-    }
-    return true;
-  }
-
-  public Map<String, Object> parse(final Event event) {
-    final Map<String, String> headers = event.getHeaders();
-    final int maxValues = Math.min(headers.size(), totalColumns);
-    final Map<String, Object> result = new HashMap<String, Object>(maxValues);
-
-    for (final ColumnMetadata column : columns) {
-      final String columnName = column.getName();
-      if (headers.containsKey(columnName) && !columnName.equals(bodyColumn)) {
-        result.put(columnName, parseValue(column.getType(), headers.get(columnName)));
-      } else if (columnName.equals(bodyColumn)) {
-        result.put(columnName, parseValue(column.getType(), new String(event.getBody(), Charsets.UTF_8)));
-      }
     }
 
-    return result;
-  }
+    public CassandraTable(
+            final Session session,
+            final TableMetadata table,
+            final ConsistencyLevel consistencyLevel,
+            final String bodyColumn,
+            final boolean ignoreCase) {
+        this.session = session;
+        this.table = table;
+        this.consistencyLevel = consistencyLevel;
+        this.bodyColumn = bodyColumn;
+
+        this.columns = table.getColumns();
+        this.totalColumns = this.columns.size();
+        this.primaryKeys = new ArrayList<String>();
+        for (final ColumnMetadata column : table.getPrimaryKey()) {
+            primaryKeys.add(column.getName());
+        }
+
+        this.ignoreCase = ignoreCase;
+    }
+
+    public void save(final List<Event> events) {
+        final BatchStatement batch = new BatchStatement();
+        for (final Event event : events) {
+            final Map<String, Object> parsedEvent = parse(event);
+            if (parsedEvent.isEmpty()) {
+                log.warn("Event {} could not be mapped", event);
+                continue;
+            }
+            if (!hasPrimaryKey(parsedEvent)) {
+                break;
+            }
+            final Insert insert = QueryBuilder.insertInto(table);
+            for (final Map.Entry<String, Object> entry : parsedEvent.entrySet()) {
+                insert.value(entry.getKey(), entry.getValue());
+            }
+            if (log.isTraceEnabled()) {
+                log.trace("Preparing insert for table {}: {}", table.getName(), insert.getQueryString());
+            }
+            batch.add(insert);
+        }
+        if (batch.getStatements().isEmpty()) {
+            log.warn("No event produced insert query for table {}", table.getName());
+            return;
+        }
+        batch.setConsistencyLevel(consistencyLevel);
+        session.execute(batch);
+    }
+
+    private boolean hasPrimaryKey(final Map<String, Object> parsedEvent) {
+        for (final String primaryKey : primaryKeys) {
+            if (!parsedEvent.containsKey(primaryKey)) {
+                log.info("Event {} misses primary key ({}), skipping", parsedEvent, primaryKey);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public Map<String, Object> parse(final Event event) {
+        // translate to lowercase for ignorecase option
+        final Map<String, String> headers = ignoreCase ? processHeadersIgnoreCase(event.getHeaders())
+                : event.getHeaders();
+        final int maxValues = Math.min(headers.size(), totalColumns);
+        final Map<String, Object> result = new HashMap<String, Object>(maxValues);
+
+        for (final ColumnMetadata column : columns) {
+            final String columnName = ignoreCase ? column.getName().toLowerCase() : column.getName();
+
+            if (headers.containsKey(columnName) && !columnName.equals(bodyColumn)) {
+                result.put(columnName, parseValue(column.getType(), headers.get(columnName)));
+            } else if (columnName.equals(bodyColumn)) {
+                result.put(columnName, parseValue(column.getType(), new String(event.getBody(), Charsets.UTF_8)));
+            }
+        }
+
+        return result;
+    }
+
+    private Map<String, String> processHeadersIgnoreCase(Map<String, String> headers) {
+
+        Map<String, String> headersLowerCase = new HashMap<>(headers.size());
+
+        Iterator<Entry<String, String>> iter = headers.entrySet().iterator();
+        Entry<String, String> entry;
+        String keyInLowerCase;
+        while (iter.hasNext()) {
+            entry = iter.next();
+            keyInLowerCase = entry.getKey().toLowerCase();
+            headersLowerCase.put(keyInLowerCase, entry.getValue());
+        }
+
+        return headersLowerCase;
+
+    }
 
 }
